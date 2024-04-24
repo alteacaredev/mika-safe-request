@@ -14,6 +14,7 @@ const axios_1 = require("@nestjs/axios");
 const common_1 = require("@nestjs/common");
 const CircuitBreaker = require("opossum");
 const url_join_1 = require("url-join");
+const safe_request_model_1 = require("./safe-request.model");
 let SafeRequestService = class SafeRequestService {
     constructor(httpService) {
         this.httpService = httpService;
@@ -81,8 +82,9 @@ let SafeRequestService = class SafeRequestService {
                 data: args[1],
             };
         }
-        const startTime = args[1]?.responseLogging ? new Date().getTime() : 0;
+        const startTime = new Date().getTime();
         let logResponse;
+        let stack;
         return this.cbInstance[key]
             .fire(...args)
             .then((response) => {
@@ -92,12 +94,22 @@ let SafeRequestService = class SafeRequestService {
             .catch((e) => {
             logResponse = e.response?.data;
             const message = e.response?.message || e.message;
+            stack = e.stack;
             this.logger.error(`[Error] [${method}] Request ${url} ${JSON.stringify(message || e)}`, e.stack);
             throw e;
         })
             .finally(() => {
             const duration = new Date().getTime() - startTime;
-            if (args[1]?.responseLogging) {
+            const showLog = args[1]?.responseLogging ?? safe_request_model_1.SafeRequestModel.showLog;
+            if (showLog) {
+                safe_request_model_1.SafeRequestModel.log?.({
+                    message: `[Info] [${method}] Request ${url}`,
+                    config: args[1],
+                    duration,
+                    response: logResponse,
+                    stack,
+                    ...(args[1]?.logObject || {}),
+                });
                 this.logger.log({
                     message: `[Info] [${method}] Request ${url}`,
                     config: args[1],
